@@ -1,0 +1,466 @@
+
+\documentclass[final, xcolor=table]{beamer}
+\usetheme{myst}
+\usepackage[orientation=portrait,size=a0,scale=1.4]{beamerposter}
+\usepackage{graphicx}
+\usepackage{booktabs  }
+\usepackage[spanish]{babel}
+\usepackage{amsmath,amsthm,amssymb,latexsym}
+\usepackage{booktabs}
+\usepackage{ragged2e}
+\graphicspath{{figures/}}
+
+<<Ini, include=FALSE, echo=FALSE, eval=TRUE>>=
+
+# -- Borrar todos los elementos del environment
+rm(list=ls())
+mdir <- getwd()
+
+# -- Establecer el sistema de medicion de la computadora
+Sys.setlocale(category = "LC_ALL", locale = "")
+
+# -- Huso horario
+Sys.setenv(tz="America/Monterrey", TZ="America/Monterrey")
+options(tz="America/Monterrey", TZ="America/Monterrey")
+
+# -- Cargar y/o instalar en automatico paquetes a utilizar -- #
+
+pkg <- c("base","downloader","dplyr","fBasics","forecast","grid",
+         "gridExtra","httr","jsonlite","lmtest","lubridate","moments",
+         "matrixStats", "PerformanceAnalytics","plyr","quantmod",
+         "reshape2","RCurl", "stats","scales","tseries",
+         "TTR","TSA","XML","xts","zoo","ggplot2")
+
+inst <- pkg %in% installed.packages()
+if(length(pkg[!inst]) > 0) install.packages(pkg[!inst])
+instpackages <- lapply(pkg, library, character.only=TRUE)
+library(tidyquant)
+library(plotly)
+library(quantmod)
+library(webshot)
+# -- Cargar archivos desde GitHub -- #
+
+RawGitHub <- "https://raw.githubusercontent.com/IFFranciscoME/"
+ROandaAPI <- paste(RawGitHub,"ROandaAPI/master/ROandaAPI.R",sep="")
+downloader::source_url(ROandaAPI,prompt=FALSE,quiet=TRUE)
+
+# -- Parametros para usar API-OANDA
+
+# Tipo de cuenta practice/live
+OA_At <- "practice"
+# ID de cuenta
+OA_Ai <- 1742531
+# Token para llamadas a API
+OA_Ak <- "ada4a61b0d5bc0e5939365e01450b614-4121f84f01ad78942c46fc3ac777baa6" 
+# Hora a la que se considera "Fin del dia"
+OA_Da <- 17
+# Uso horario
+OA_Ta <- "America/Mexico_City"
+# Instrumento
+OA_In <- "USD_MXN"
+# Granularidad o periodicidad de los precios H4 = Cada 4 horas
+# S5, S10, S30, M1, M5, M15, M30, H1, H4, H8, D, M
+OA_Pr <- "D"
+# Multiplicador de precios para convertir a PIPS
+MultPip_MT1 <- 10000
+
+
+Fecha_Inicio <-"2018-01-01" 
+Fecha_Fin <- "2018-11-07"
+
+Precios_Oanda <- HisPrices(AccountType = OA_At, Granularity = OA_Pr,
+                             DayAlign = OA_Da, TimeAlign = OA_Ta, Token = OA_Ak,
+                             Instrument = OA_In, 
+                             Start = Fecha_Inicio, End = Fecha_Fin, Count = NULL)
+
+Precios_Oanda$TimeStamp <- as.Date(Precios_Oanda$TimeStamp)
+@
+
+% -- -------------------------------------------------------------------------------------------- %
+%	-- TITLE SECTION 
+% -- -------------------------------------------------------------------------------------------- %
+
+\title{\Huge Proyecto Trading}
+\institute{\Large Tipo de cambio USD/MXN}
+
+% -- -------------------------------------------------------------------------------------------- %
+%	-- FOOTER TEXT
+% -- -------------------------------------------------------------------------------------------- %
+
+\newcommand{\leftfoot}{Official Web Page:}
+\newcommand{\rightfoot}{More Info: }
+
+% -- -------------------------------------------------------------------------------------------- %
+\begin{document}
+
+\title{Proyecto Trading}
+\begin{frame}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Informacion del Activo -- VELAS ------------------------------------------------------ -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+
+  \begin{block}{\small Trayectoria precio de cierre } : 
+  \textit{Texto}
+
+<<Trayectoria precio de cierre, include=TRUE, echo=FALSE, eval=TRUE>>=
+#Trayectoria Precio de Cierre de la serie de tiempo
+ggplot(Precios_Oanda, aes(TimeStamp, Close)) + geom_line() + xlab("Fecha") + ylab("Precio_Cierre")
+
+@
+
+
+
+    % \begin{figure}[H]
+    % \includegraphics[scale=1]{figure/G0_HistoricoPrecios-1.pdf}
+    % \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+\begin{block}{\small Histograma de la serie de tiempo ("High")}
+<<Histograma (high), include=TRUE, echo=FALSE, eval=TRUE>>=
+#Histograma de la serie de tiempo ("High")
+qplot(Precios_Oanda$High, geom="histogram", binwidth=0.15, main="Histograma USD/MXN Precio Máximo", 
+      xlab ="Precio_Maximo", ylab="Frecuencia")
+@
+
+  
+\end{block}
+\end{column}
+
+
+% -- ------------------------------------------------------------------------------- Columna 3 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.32 \linewidth}
+\begin{block}{\small Diagrama de dispersion}
+<<Diagrama de disperion, include=TRUE, echo=FALSE, eval=TRUE>>=
+#Diagrama de dispersión
+plot(Precios_Oanda$TickVolume, Precios_Oanda$Close,type="p", 
+     main="Diagrama de Dispersión Volumen vs Precio de Cierre", xlab="Volumen", ylab="Precio de Cierre")
+@
+
+  
+
+\end{block}
+\end{column}
+
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Informacion del Activo -- Velas A ---------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.24 \linewidth}
+
+  \begin{block}{\small {Precio.High - Precio.Low}}
+<<Diagrama de caja, include=TRUE, echo=FALSE, eval=TRUE>>=
+#Diagrama de caja
+boxplot(Precios_Oanda$High, Precios_Oanda$Low,col=c("azure4","azure3"), names=c("High","Low"),fill=c("azure4","azure3"),
+        ylab="Cierre USD/MXN", xlab="Categorías", title="Variables", legend=c("High","Low"))
+@
+
+    % \begin{figure}[H]
+    % \includegraphics[scale=1]{figure/G1A_HistoricoVelas-1.pdf}
+    % \end{figure}
+
+  \end{block}
+
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.24 \linewidth}
+
+  \begin{block}{\small {EMA}}
+<<EMA, include=TRUE, echo=FALSE, eval=TRUE>>=
+##EMA
+ema.50 <- EMA(Precios_Oanda[,"Close"], 50)
+plot.ts(ema.50)
+@
+EMA 50
+    % \begin{figure}[H]
+    % \includegraphics[scale=1]{figure/G1A_HistoricoVelas-2.pdf}
+    % \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Informacion del Activo -- Velas B ---------------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.24 \linewidth}
+
+  \begin{block}{\small {MACD}}
+
+<<MACD, include=TRUE, echo=FALSE, eval=TRUE>>=
+###MACD
+macd <- MACD( Precios_Oanda[,"Close"], 12, 26, 9, maType="RSI", percent = TRUE )
+plot.ts(macd)
+
+
+@
+
+    % \begin{figure}[H]
+    % \includegraphics[scale=1]{figure/G1A_HistoricoVelas-3.pdf}
+    % \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.24 \linewidth}
+
+  \begin{block}{\small {OBV}}
+<<OBV, include=TRUE, echo=FALSE, eval=TRUE>>=
+##OBV 
+OBV.10 <- OBV(Precios_Oanda[,"Close"],Precios_Oanda[,"TickVolume"])
+plot(OBV.10)
+@
+
+    % \begin{figure}[H]
+    % \includegraphics[scale=1]{figure/G1A_HistoricoVelas-4.pdf}
+    % \end{figure}
+
+  \end{block}
+  
+\end{column}
+
+
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Informacion del Algoritmo ------------------------------------------------------------ -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.48 \linewidth}
+
+\begin{block}{\small Descripci\'on}
+\justify{Metodolg\'ia \textit{BoxJenkins} para series de tiempo }
+
+%\begin{text}
+
+%El presente domcumento proyecta la trayectoria del precio entre las divisas de Estados Unido y M\'exico, USD-MX, en lo que respecta del año del 2018, a esta trayectoria se le han implementado una serie diversos m\'etodos estad\'isticos con el fin de ver su comportamiento y hacer una predicci\'on sobre la misma volatiidad o bien hacer una estrategia financiera.
+
+
+%\end{text}
+
+\end{block}
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.48 \linewidth}
+\begin{block}{\small Resultado de Datos}
+\small
+\textbf{Par\'ametros de Entrada}
+
+%Despu\'es de la aplicaci\'on de los diversos par\'ametros aplicados a la trayectoria del precio UDS-MX se puede observar claramente que a partir de las primeras semanas de abril el precio empezo a aumentar por lo que al gr\'aficar su histograma lo vemos sesgado hacia la izquierda. La volatilidad sigue siendo alta, en parte se puede explicar por la actual situaci\'on de M\'exico, pa\'is en el cual se viven momentos de incertidumbre al haber un cambio de presidente con ideas populitas.
+
+% \begin{itemize}
+%   \item Tama\~no de Ventana de informaci\'on: 
+%   \item Noci\'on de par\'ametro info:
+%   \item L\'ogica de Aplicaci\'on de Algor\'itmo:
+%   \item Instrumento a Utilizar: 
+%   \item Periodicidad de precios:
+%   \item Valores de Exploraci\'on.
+%   \end{itemize}
+
+\end{block}
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 3 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+%\begin{column}{.32 \linewidth}
+%\begin{block}{\small Datos Salida}
+%\small
+%\textbf{Par\'ametros de Salida}
+
+%\begin{itemize}
+ % \item Predicci\'on del signo del rendimiento
+  %\item Take Profit
+  %\item Stop Loss
+%\end{itemize}
+
+%\end{block}
+%\end{column}
+
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Informacion del desempeno de Algoritmo ----------------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.48 \linewidth}
+\begin{block}{\small Grafico de Velas}
+<<Velas, include=TRUE, echo=FALSE, eval=TRUE>>=
+Velas <- ggplot(data=`Precios_Oanda`, aes(x=TimeStamp, y=Close)) +
+  geom_candlestick(aes(open=Open, high=High, low=Low, close=Close), na.rm = TRUE,
+                   color_up = "darkgreen", color_down = "darkred",  fill_up  = "darkgreen", fill_down  = "darkred")+
+  #geom_ma(ma_fun = GMMA, n = 21, linetype = 5, size = 1.25) +
+  labs(title = "USD/MXN",y="Precio de Cierre", x="Tiempo") +
+  theme_tq()
+Velas
+@
+
+
+%\small
+%\begin{itemize}
+ % \item Criterio 1: Con mayor profit final acumulado.
+  %\item Criterio 2: Con menor DrawDown registrado.
+  %\item Criterio 3: Con menor registro de minusval\'ia general.
+  %\item Criterio 4: Mayor Exito en Trading.
+%\end{itemize}
+
+\end{block}
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 3 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.48 \linewidth}
+\begin{block}{\small BBands en trayectoria del precio}
+<<BBands, include=TRUE, echo=FALSE, eval=TRUE>>=
+#BBands
+Close <- xts(x = Precios_Oanda$Close, order.by = Precios_Oanda$TimeStamp)
+chartSeries(
+  Close,
+  theme = chartTheme("black"),
+  TA = c(addBBands(),addTA(RSI(Close)))
+)
+@
+
+  % \begin{figure}[H]
+  %   \includegraphics[scale=1]{figure/G2_ProfitAcumulada-1.pdf}
+  % \end{figure}
+  
+\end{block}
+\end{column}
+
+\end{columns}
+
+% -- ----------------------------------------------------------------------------------------- -- %
+% -- -- Perdedoras Consecutivas y Ganadoras Consecutivas ------------------------------------- -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{columns}[t]
+
+% -- ------------------------------------------------------------------------------- Columna 1 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.48 \linewidth}
+\begin{block}{\small Grafico de velas con SMA}
+
+<<Velas con SMA, include=TRUE, echo=FALSE, eval=TRUE>>=
+Candle <- ggplot(data=`Precios_Oanda`, aes(x=TimeStamp, y=Close)) +
+  geom_candlestick(aes(open=Open, high=High, low=Low, close=Close), na.rm = TRUE,
+                   color_up = "darkgreen", color_down = "darkred",  fill_up  = "darkgreen", fill_down  = "darkred")+
+  geom_ma(ma_fun = SMA, n = 21, linetype = 5, size = 1.25) +
+  labs(title = "USD/MXN",y="Precio de cierre", x="Timepo") +
+  theme_tq()
+Candle
+
+@
+
+
+  % \small
+  % \centering
+  % \Sexpr{kable(Tabla_PcGc[[1]], align = "c")}
+
+\end{block}
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 2 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+\begin{column}{.48 \linewidth}
+\begin{block}{\small Velas con DEMA }
+
+<<Velas con DEMA, include=TRUE, echo=FALSE, eval=TRUE>>=
+DEMA.50 <- ggplot(data=`Precios_Oanda`, aes(x=TimeStamp, y=Close)) +
+  geom_candlestick(aes(open=Open, high=High, low=Low, close=Close), na.rm = TRUE,
+                   color_up = "darkgreen", color_down = "darkred",  fill_up  = "darkgreen", fill_down  = "darkred")+
+  geom_ma(ma_fun = DEMA, n = 1, linetype = 5, size = 1.25) +
+  labs(title = "USD/MXN ",y="Precio de Cierre", x="Tiempo") +
+  theme_tq()
+DEMA.50
+@
+
+  % \small
+  % \centering
+  % \Sexpr{kable(Tabla_PcGc[[2]], align = "c")}
+
+\end{block}
+\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 3 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+%\begin{column}{.24 \linewidth}
+%\begin{block}{\small Tabla Gc Vs Pc }
+
+  % \small
+  % \centering
+  % \Sexpr{kable(Tabla_PcGc[[3]], align = "c")}
+
+%\end{block}
+%\end{column}
+
+% -- ------------------------------------------------------------------------------- Columna 4 -- %
+% -- ----------------------------------------------------------------------------------------- -- %
+
+%\begin{column}{.24 \linewidth}
+%\begin{block}{\small Tabla Gc Vs Pc }
+
+  % \small
+  % \centering
+  % \Sexpr{kable(Tabla_PcGc[[4]], align = "c")}
+
+%\end{block}
+%\end{column}
+
+\end{columns}
+\end{frame}
+
+\end{document}
